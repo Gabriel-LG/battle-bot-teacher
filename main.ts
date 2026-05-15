@@ -72,3 +72,11 @@ let line = ""
 serial.redirectToUSB()
 serial.setBaudRate(BaudRate.BaudRate9600)
 serial.writeLine("commander")
+control.inBackground(function () {
+    while (true) {
+        for (let index = 0; index <= 15; index++) {
+            teacher.transmitState(index)
+        }
+        basic.pause(100)
+    }
+})
