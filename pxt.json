@@ -1,5 +1,5 @@
 {
-    "name": "Battle Bot Teacher",
+    "name": "BattleBot_Teacher",
     "description": "",
     "dependencies": {
         "core": "*",
@@ -11,7 +11,7 @@
         "main.blocks",
         "main.ts",
         "README.md",
-        "controller.ts"
+        "teacher.ts"
     ],
     "testFiles": [
         "test.ts"
