@@ -17,11 +17,12 @@ class BattleBotGUI:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("BattleBot Teacher Control")
-        self.root.geometry("500x600")
+        self.root.geometry("600x600")
         self.serial_port: Optional[serial.Serial] = None
         
-        # Load player names from config
-        self.config_file = "battlebot_config.json"
+        # Load player names from config (in same directory as script)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.config_file = os.path.join(script_dir, "battlebot_config.json")
         self.player_names = self.load_config()
         
         self.create_widgets()
@@ -55,9 +56,14 @@ class BattleBotGUI:
         self.port_combo = ttk.Combobox(port_frame, width=30, state="readonly")
         self.port_combo.grid(row=0, column=1, padx=5)
         
-        ttk.Button(port_frame, text="Refresh", command=self.refresh_ports).grid(row=0, column=2, padx=5)
-        ttk.Button(port_frame, text="Connect", command=self.connect).grid(row=0, column=3, padx=5)
-        ttk.Button(port_frame, text="Disconnect", command=self.disconnect).grid(row=0, column=4, padx=5)
+        self.btn_refresh = ttk.Button(port_frame, text="Refresh", command=self.refresh_ports)
+        self.btn_refresh.grid(row=0, column=2, padx=5)
+        
+        self.btn_connect = ttk.Button(port_frame, text="Connect", command=self.connect)
+        self.btn_connect.grid(row=0, column=3, padx=5)
+        
+        self.btn_disconnect = ttk.Button(port_frame, text="Disconnect", command=self.disconnect)
+        self.btn_disconnect.grid(row=0, column=4, padx=5)
         
         self.connection_status = ttk.Label(port_frame, text="Not Connected", foreground="red")
         self.connection_status.grid(row=1, column=0, columnspan=5, pady=5)
@@ -66,15 +72,21 @@ class BattleBotGUI:
         global_frame = ttk.LabelFrame(self.root, text="Global Controls", padding=10)
         global_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        ttk.Button(global_frame, text="Mute All", command=lambda: self.send_command("mute,1"), 
-                  width=15).grid(row=0, column=0, padx=5, pady=5)
-        ttk.Button(global_frame, text="Unmute All", command=lambda: self.send_command("mute,0"),
-                  width=15).grid(row=0, column=1, padx=5, pady=5)
+        self.btn_mute = ttk.Button(global_frame, text="Mute All", command=lambda: self.send_command("mute,1"), 
+                  width=20)
+        self.btn_mute.grid(row=0, column=0, padx=5, pady=5)
         
-        ttk.Button(global_frame, text="Stop All Motors", command=lambda: self.send_command("stop,1"),
-                  width=15).grid(row=1, column=0, padx=5, pady=5)
-        ttk.Button(global_frame, text="Enable All Motors", command=lambda: self.send_command("stop,0"),
-                  width=15).grid(row=1, column=1, padx=5, pady=5)
+        self.btn_unmute = ttk.Button(global_frame, text="Unmute All", command=lambda: self.send_command("mute,0"),
+                  width=20)
+        self.btn_unmute.grid(row=0, column=1, padx=5, pady=5)
+        
+        self.btn_stop = ttk.Button(global_frame, text="Stop All Motors", command=lambda: self.send_command("stop,1"),
+                  width=20)
+        self.btn_stop.grid(row=1, column=0, padx=5, pady=5)
+        
+        self.btn_enable = ttk.Button(global_frame, text="Enable All Motors", command=lambda: self.send_command("stop,0"),
+                  width=20)
+        self.btn_enable.grid(row=1, column=1, padx=5, pady=5)
         
         # Battle Controls Frame
         battle_frame = ttk.LabelFrame(self.root, text="Battle Setup", padding=10)
@@ -84,48 +96,67 @@ class BattleBotGUI:
         ttk.Label(battle_frame, text="Player 1:", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=tk.W, pady=5)
         
         ttk.Label(battle_frame, text="Robot ID:").grid(row=1, column=0, sticky=tk.W, padx=(20, 5))
-        self.player1_id = ttk.Spinbox(battle_frame, from_=0, to=15, width=10)
+        self.player1_id = ttk.Spinbox(battle_frame, from_=0, to=15, width=10, command=lambda: self.load_player_name(1))
         self.player1_id.set(0)
         self.player1_id.grid(row=1, column=1, sticky=tk.W, pady=2)
+        self.player1_id.bind("<KeyRelease>", lambda e: self.load_player_name(1))
+        self.player1_id.bind("<FocusOut>", lambda e: self.load_player_name(1))
         
         ttk.Label(battle_frame, text="Name:").grid(row=2, column=0, sticky=tk.W, padx=(20, 5))
         self.player1_name = ttk.Entry(battle_frame, width=25)
         self.player1_name.grid(row=2, column=1, columnspan=2, sticky=tk.W, pady=2)
-        self.player1_name.bind("<FocusOut>", lambda e: self.save_player_name(1))
+        self.player1_name.bind("<FocusOut>", lambda e: self.on_player_name_change(1))
+        self.player1_name.bind("<KeyRelease>", lambda e: self.on_player_name_change(1))
         
-        # Load saved name for player 1
-        if "0" in self.player_names:
-            self.player1_name.insert(0, self.player_names["0"])
+        # Load saved name for player 1 (without updating buttons yet)
+        robot_id = self.player1_id.get()
+        if robot_id in self.player_names:
+            self.player1_name.insert(0, self.player_names[robot_id])
+        else:
+            self.player1_name.insert(0, f"Player {robot_id}")
         
         # Player 2
         ttk.Label(battle_frame, text="Player 2:", font=("Arial", 10, "bold")).grid(row=3, column=0, sticky=tk.W, pady=(15, 5))
         
         ttk.Label(battle_frame, text="Robot ID:").grid(row=4, column=0, sticky=tk.W, padx=(20, 5))
-        self.player2_id = ttk.Spinbox(battle_frame, from_=0, to=15, width=10)
+        self.player2_id = ttk.Spinbox(battle_frame, from_=0, to=15, width=10, command=lambda: self.load_player_name(2))
         self.player2_id.set(1)
         self.player2_id.grid(row=4, column=1, sticky=tk.W, pady=2)
+        self.player2_id.bind("<KeyRelease>", lambda e: self.load_player_name(2))
+        self.player2_id.bind("<FocusOut>", lambda e: self.load_player_name(2))
         
         ttk.Label(battle_frame, text="Name:").grid(row=5, column=0, sticky=tk.W, padx=(20, 5))
         self.player2_name = ttk.Entry(battle_frame, width=25)
         self.player2_name.grid(row=5, column=1, columnspan=2, sticky=tk.W, pady=2)
-        self.player2_name.bind("<FocusOut>", lambda e: self.save_player_name(2))
+        self.player2_name.bind("<FocusOut>", lambda e: self.on_player_name_change(2))
+        self.player2_name.bind("<KeyRelease>", lambda e: self.on_player_name_change(2))
         
-        # Load saved name for player 2
-        if "1" in self.player_names:
-            self.player2_name.insert(0, self.player_names["1"])
+        # Load saved name for player 2 (without updating buttons yet)
+        robot_id = self.player2_id.get()
+        if robot_id in self.player_names:
+            self.player2_name.insert(0, self.player_names[robot_id])
+        else:
+            self.player2_name.insert(0, f"Player {robot_id}")
         
         # Battle buttons
-        ttk.Button(battle_frame, text="Start Battle", command=self.start_battle,
-                  width=20).grid(row=6, column=0, columnspan=2, pady=20)
+        self.btn_start_battle = ttk.Button(battle_frame, text="Start Battle", command=self.start_battle,
+                  width=20)
+        self.btn_start_battle.grid(row=6, column=0, columnspan=2, pady=20)
         
         # Winner Frame
         winner_frame = ttk.LabelFrame(self.root, text="Declare Winner", padding=10)
         winner_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        ttk.Button(winner_frame, text="Player 1 Wins!", command=lambda: self.declare_winner(1),
-                  width=20).grid(row=0, column=0, padx=10, pady=5)
-        ttk.Button(winner_frame, text="Player 2 Wins!", command=lambda: self.declare_winner(2),
-                  width=20).grid(row=0, column=1, padx=10, pady=5)
+        self.btn_winner1 = ttk.Button(winner_frame, text="Player 1 Wins!", command=lambda: self.declare_winner(1),
+                  width=25)
+        self.btn_winner1.grid(row=0, column=0, padx=10, pady=5)
+        
+        self.btn_winner2 = ttk.Button(winner_frame, text="Player 2 Wins!", command=lambda: self.declare_winner(2),
+                  width=25)
+        self.btn_winner2.grid(row=0, column=1, padx=10, pady=5)
+        
+        # Update button text with initial names
+        self.update_winner_buttons()
         
         # Status/Log Frame
         log_frame = ttk.LabelFrame(self.root, text="Status Log", padding=5)
@@ -137,6 +168,30 @@ class BattleBotGUI:
         scrollbar = ttk.Scrollbar(self.log_text, command=self.log_text.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.log_text.config(yscrollcommand=scrollbar.set)
+        
+        # Disable controls initially (not connected)
+        self.update_controls_state(False)
+    
+    def update_controls_state(self, connected: bool):
+        """Enable or disable control buttons based on connection state."""
+        # Connection controls (inverse logic - enabled when NOT connected)
+        connection_state = tk.DISABLED if connected else tk.NORMAL
+        self.btn_connect.config(state=connection_state)
+        self.btn_refresh.config(state=connection_state)
+        self.port_combo.config(state="disabled" if connected else "readonly")
+        
+        # Disconnect button (enabled when connected)
+        self.btn_disconnect.config(state=tk.NORMAL if connected else tk.DISABLED)
+        
+        # Control buttons (enabled when connected)
+        control_state = tk.NORMAL if connected else tk.DISABLED
+        self.btn_mute.config(state=control_state)
+        self.btn_unmute.config(state=control_state)
+        self.btn_stop.config(state=control_state)
+        self.btn_enable.config(state=control_state)
+        self.btn_start_battle.config(state=control_state)
+        self.btn_winner1.config(state=control_state)
+        self.btn_winner2.config(state=control_state)
     
     def refresh_ports(self):
         """Refresh available serial ports."""
@@ -168,9 +223,11 @@ class BattleBotGUI:
             if response == "commander":
                 self.connection_status.config(text=f"Connected to {port_name}", foreground="green")
                 self.log(f"Connected to {port_name} (verified)")
+                self.update_controls_state(True)
             else:
                 self.connection_status.config(text=f"Connected to {port_name} (unverified)", foreground="orange")
                 self.log(f"Connected to {port_name} but didn't receive 'commander' greeting")
+                self.update_controls_state(True)
         except Exception as e:
             messagebox.showerror("Connection Error", f"Failed to connect: {e}")
             self.log(f"Connection failed: {e}")
@@ -182,6 +239,7 @@ class BattleBotGUI:
             self.serial_port.close()
             self.serial_port = None
             self.connection_status.config(text="Not Connected", foreground="red")
+            self.update_controls_state(False)
             self.log("Disconnected")
         else:
             self.log("Not connected")
@@ -210,6 +268,39 @@ class BattleBotGUI:
             messagebox.showerror("Communication Error", f"Failed to send command: {e}")
             self.log(f"Error sending '{command}': {e}")
             return False
+    
+    def load_player_name(self, player: int):
+        """Load saved player name for selected robot ID."""
+        if player == 1:
+            robot_id = self.player1_id.get()
+            name_entry = self.player1_name
+        else:
+            robot_id = self.player2_id.get()
+            name_entry = self.player2_name
+        
+        # Clear current name
+        name_entry.delete(0, tk.END)
+        
+        # Load saved name if exists, otherwise use default
+        if robot_id in self.player_names:
+            name_entry.insert(0, self.player_names[robot_id])
+        else:
+            name_entry.insert(0, f"Player {robot_id}")
+        
+        # Update winner button text
+        self.update_winner_buttons()
+    
+    def on_player_name_change(self, player: int):
+        """Handle player name change event."""
+        self.save_player_name(player)
+        self.update_winner_buttons()
+    
+    def update_winner_buttons(self):
+        """Update the text on winner buttons to show current player names."""
+        name1 = self.player1_name.get() or "Player 1"
+        name2 = self.player2_name.get() or "Player 2"
+        self.btn_winner1.config(text=f"{name1} Wins!")
+        self.btn_winner2.config(text=f"{name2} Wins!")
     
     def save_player_name(self, player: int):
         """Save player name to config."""
