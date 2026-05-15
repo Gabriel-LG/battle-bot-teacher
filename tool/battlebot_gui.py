@@ -115,7 +115,8 @@ class BattleBotGUI:
         self.player1_id.set(0)
         self.player1_id.grid(row=1, column=0, padx=10, pady=2)
         self.player1_id.bind("<KeyRelease>", lambda e: self.load_player_name(1))
-        self.player1_id.bind("<FocusOut>", lambda e: self.load_player_name(1))
+        self.player1_id.bind("<FocusOut>", lambda e: self.validate_and_fix_id(1))
+        self.player1_id.bind("<Return>", lambda e: self.validate_and_fix_id(1))
         
         # VS label (centered vertically across rows 1-3)
         ttk.Label(battle_frame, text="Versus", font=("Arial", 14, "bold")).grid(row=1, column=1, rowspan=3, padx=30)
@@ -124,7 +125,8 @@ class BattleBotGUI:
         self.player2_id.set(1)
         self.player2_id.grid(row=1, column=2, padx=10, pady=2)
         self.player2_id.bind("<KeyRelease>", lambda e: self.load_player_name(2))
-        self.player2_id.bind("<FocusOut>", lambda e: self.load_player_name(2))
+        self.player2_id.bind("<FocusOut>", lambda e: self.validate_and_fix_id(2))
+        self.player2_id.bind("<Return>", lambda e: self.validate_and_fix_id(2))
         
         # Name labels - centered above fields
         ttk.Label(battle_frame, text="Name:", font=("Arial", 9)).grid(row=2, column=0, padx=10, pady=(10, 2))
@@ -207,6 +209,23 @@ class BattleBotGUI:
         
         # Disable controls initially (not connected)
         self.update_controls_state(False)
+    
+    def validate_and_fix_id(self, player: int):
+        """Validate and correct robot ID when focus leaves the field."""
+        spinbox = self.player1_id if player == 1 else self.player2_id
+        try:
+            value = int(spinbox.get())
+            # Clamp to valid range
+            if value < 0:
+                spinbox.set(0)
+            elif value > 15:
+                spinbox.set(15)
+        except ValueError:
+            # Not a valid number, reset to 0
+            spinbox.set(0)
+        
+        # Update player name after correction
+        self.load_player_name(player)
     
     def toggle_log(self):
         """Toggle visibility of status log."""
