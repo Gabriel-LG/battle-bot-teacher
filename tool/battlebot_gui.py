@@ -90,21 +90,40 @@ class BattleBotGUI:
         
         # Battle Controls Frame
         battle_frame = ttk.LabelFrame(self.root, text="Battle Setup", padding=10)
-        battle_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        battle_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        # Player 1
-        ttk.Label(battle_frame, text="Player 1:", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=tk.W, pady=5)
+        # Configure columns for consistent width
+        battle_frame.columnconfigure(0, weight=1, uniform="player")
+        battle_frame.columnconfigure(1, weight=0)
+        battle_frame.columnconfigure(2, weight=1, uniform="player")
         
-        ttk.Label(battle_frame, text="Robot ID:").grid(row=1, column=0, sticky=tk.W, padx=(20, 5))
+        # Column headers - centered above fields
+        ttk.Label(battle_frame, text="Robot ID:", font=("Arial", 9)).grid(row=0, column=0, padx=10, pady=(5, 2))
+        ttk.Label(battle_frame, text="Robot ID:", font=("Arial", 9)).grid(row=0, column=2, padx=10, pady=(5, 2))
+        
+        # Robot ID spinboxes
         self.player1_id = ttk.Spinbox(battle_frame, from_=0, to=15, width=10, command=lambda: self.load_player_name(1))
         self.player1_id.set(0)
-        self.player1_id.grid(row=1, column=1, sticky=tk.W, pady=2)
+        self.player1_id.grid(row=1, column=0, padx=10, pady=2)
         self.player1_id.bind("<KeyRelease>", lambda e: self.load_player_name(1))
         self.player1_id.bind("<FocusOut>", lambda e: self.load_player_name(1))
         
-        ttk.Label(battle_frame, text="Name:").grid(row=2, column=0, sticky=tk.W, padx=(20, 5))
-        self.player1_name = ttk.Entry(battle_frame, width=25)
-        self.player1_name.grid(row=2, column=1, columnspan=2, sticky=tk.W, pady=2)
+        # VS label (centered vertically across rows 1-3)
+        ttk.Label(battle_frame, text="VS", font=("Arial", 14, "bold")).grid(row=1, column=1, rowspan=3, padx=30)
+        
+        self.player2_id = ttk.Spinbox(battle_frame, from_=0, to=15, width=10, command=lambda: self.load_player_name(2))
+        self.player2_id.set(1)
+        self.player2_id.grid(row=1, column=2, padx=10, pady=2)
+        self.player2_id.bind("<KeyRelease>", lambda e: self.load_player_name(2))
+        self.player2_id.bind("<FocusOut>", lambda e: self.load_player_name(2))
+        
+        # Name labels - centered above fields
+        ttk.Label(battle_frame, text="Name:", font=("Arial", 9)).grid(row=2, column=0, padx=10, pady=(10, 2))
+        ttk.Label(battle_frame, text="Name:", font=("Arial", 9)).grid(row=2, column=2, padx=10, pady=(10, 2))
+        
+        # Name entry fields
+        self.player1_name = ttk.Entry(battle_frame, width=20)
+        self.player1_name.grid(row=3, column=0, padx=10, pady=2)
         self.player1_name.bind("<FocusOut>", lambda e: self.on_player_name_change(1))
         self.player1_name.bind("<KeyRelease>", lambda e: self.on_player_name_change(1))
         
@@ -115,19 +134,8 @@ class BattleBotGUI:
         else:
             self.player1_name.insert(0, f"Player {robot_id}")
         
-        # Player 2
-        ttk.Label(battle_frame, text="Player 2:", font=("Arial", 10, "bold")).grid(row=3, column=0, sticky=tk.W, pady=(15, 5))
-        
-        ttk.Label(battle_frame, text="Robot ID:").grid(row=4, column=0, sticky=tk.W, padx=(20, 5))
-        self.player2_id = ttk.Spinbox(battle_frame, from_=0, to=15, width=10, command=lambda: self.load_player_name(2))
-        self.player2_id.set(1)
-        self.player2_id.grid(row=4, column=1, sticky=tk.W, pady=2)
-        self.player2_id.bind("<KeyRelease>", lambda e: self.load_player_name(2))
-        self.player2_id.bind("<FocusOut>", lambda e: self.load_player_name(2))
-        
-        ttk.Label(battle_frame, text="Name:").grid(row=5, column=0, sticky=tk.W, padx=(20, 5))
-        self.player2_name = ttk.Entry(battle_frame, width=25)
-        self.player2_name.grid(row=5, column=1, columnspan=2, sticky=tk.W, pady=2)
+        self.player2_name = ttk.Entry(battle_frame, width=20)
+        self.player2_name.grid(row=3, column=2, padx=10, pady=2)
         self.player2_name.bind("<FocusOut>", lambda e: self.on_player_name_change(2))
         self.player2_name.bind("<KeyRelease>", lambda e: self.on_player_name_change(2))
         
@@ -138,31 +146,53 @@ class BattleBotGUI:
         else:
             self.player2_name.insert(0, f"Player {robot_id}")
         
-        # Battle buttons
+        # Battle button
         self.btn_start_battle = ttk.Button(battle_frame, text="Start Battle", command=self.start_battle,
                   width=20)
-        self.btn_start_battle.grid(row=6, column=0, columnspan=2, pady=20)
+        self.btn_start_battle.grid(row=4, column=0, columnspan=3, pady=20)
         
-        # Winner Frame
+        # Winner Frame (with border, aligned with battle frame)
         winner_frame = ttk.LabelFrame(self.root, text="Declare Winner", padding=10)
         winner_frame.pack(fill=tk.X, padx=10, pady=5)
         
+        # Configure columns to match battle frame exactly
+        winner_frame.columnconfigure(0, weight=1, uniform="player")
+        winner_frame.columnconfigure(1, weight=0)
+        winner_frame.columnconfigure(2, weight=1, uniform="player")
+        
         self.btn_winner1 = ttk.Button(winner_frame, text="Player 1 Wins!", command=lambda: self.declare_winner(1),
-                  width=25)
+                  width=20)
         self.btn_winner1.grid(row=0, column=0, padx=10, pady=5)
         
+        # Empty spacer label to maintain center column
+        ttk.Label(winner_frame, text="").grid(row=0, column=1)
+        
         self.btn_winner2 = ttk.Button(winner_frame, text="Player 2 Wins!", command=lambda: self.declare_winner(2),
-                  width=25)
-        self.btn_winner2.grid(row=0, column=1, padx=10, pady=5)
+                  width=20)
+        self.btn_winner2.grid(row=0, column=2, padx=10, pady=5)
         
         # Update button text with initial names
         self.update_winner_buttons()
         
-        # Status/Log Frame
-        log_frame = ttk.LabelFrame(self.root, text="Status Log", padding=5)
-        log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        # Spacer frame that expands to take remaining vertical space
+        spacer_frame = ttk.Frame(self.root)
+        spacer_frame.pack(fill=tk.BOTH, expand=True)
         
-        self.log_text = tk.Text(log_frame, height=8, state=tk.DISABLED, wrap=tk.WORD)
+        # Status/Log Frame with toggle
+        log_header_frame = ttk.Frame(self.root)
+        log_header_frame.pack(fill=tk.X, padx=10, pady=(5, 0))
+        
+        self.log_visible = tk.BooleanVar(value=False)
+        self.btn_toggle_log = ttk.Button(log_header_frame, text="▶ Show Status Log", command=self.toggle_log)
+        self.btn_toggle_log.pack(side=tk.LEFT)
+        
+        self.log_frame = ttk.LabelFrame(self.root, text="Status Log", padding=5)
+        # Don't pack initially (collapsed by default)
+        
+        self.log_frame = ttk.LabelFrame(self.root, text="Status Log", padding=5)
+        # Don't pack initially (collapsed by default)
+        
+        self.log_text = tk.Text(self.log_frame, height=8, state=tk.DISABLED, wrap=tk.WORD)
         self.log_text.pack(fill=tk.BOTH, expand=True)
         
         scrollbar = ttk.Scrollbar(self.log_text, command=self.log_text.yview)
@@ -171,6 +201,19 @@ class BattleBotGUI:
         
         # Disable controls initially (not connected)
         self.update_controls_state(False)
+    
+    def toggle_log(self):
+        """Toggle visibility of status log."""
+        if self.log_visible.get():
+            # Hide log
+            self.log_frame.pack_forget()
+            self.btn_toggle_log.config(text="▶ Show Status Log")
+            self.log_visible.set(False)
+        else:
+            # Show log
+            self.log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+            self.btn_toggle_log.config(text="▼ Hide Status Log")
+            self.log_visible.set(True)
     
     def update_controls_state(self, connected: bool):
         """Enable or disable control buttons based on connection state."""
