@@ -32,26 +32,32 @@ class BattleBotGUI:
         # Load player names from config (in same directory as script)
         script_dir = os.path.dirname(os.path.abspath(__file__))
         self.config_file = os.path.join(script_dir, "battlebot_config.json")
-        self.player_names = self.load_config()
+        config = self.load_config()
+        self.player_names = config.get("player_names", {})
+        self.robot_names = config.get("robot_names", {})
         
         self.create_widgets()
         self.refresh_ports()
         
     def load_config(self) -> dict:
-        """Load player names from config file."""
+        """Load player and robot names from config file."""
         if os.path.exists(self.config_file):
             try:
                 with open(self.config_file, 'r') as f:
                     return json.load(f)
             except:
-                return {}
-        return {}
+                return {"player_names": {}, "robot_names": {}}
+        return {"player_names": {}, "robot_names": {}}
     
     def save_config(self):
-        """Save player names to config file."""
+        """Save player and robot names to config file."""
         try:
+            config = {
+                "player_names": self.player_names,
+                "robot_names": self.robot_names
+            }
             with open(self.config_file, 'w') as f:
-                json.dump(self.player_names, f, indent=2)
+                json.dump(config, f, indent=2)
         except Exception as e:
             print(f"Failed to save config: {e}")
     
@@ -107,8 +113,8 @@ class BattleBotGUI:
         battle_frame.columnconfigure(2, weight=1, uniform="player")
         
         # Column headers - centered above fields
-        ttk.Label(battle_frame, text="Robot ID:", font=("Arial", 9)).grid(row=0, column=0, padx=10, pady=(5, 2))
-        ttk.Label(battle_frame, text="Robot ID:", font=("Arial", 9)).grid(row=0, column=2, padx=10, pady=(5, 2))
+        ttk.Label(battle_frame, text="Controller:", font=("Arial", 9)).grid(row=0, column=0, padx=10, pady=(5, 2))
+        ttk.Label(battle_frame, text="Controller:", font=("Arial", 9)).grid(row=0, column=2, padx=10, pady=(5, 2))
         
         # Robot ID spinboxes
         self.player1_id = ttk.Spinbox(battle_frame, from_=0, to=15, width=10, command=lambda: self.load_player_name(1))
@@ -116,51 +122,66 @@ class BattleBotGUI:
         self.player1_id.grid(row=1, column=0, padx=10, pady=2)
         self.player1_id.bind("<KeyRelease>", lambda e: self.load_player_name(1))
         self.player1_id.bind("<FocusOut>", lambda e: self.validate_and_fix_id(1))
-        self.player1_id.bind("<Return>", lambda e: self.validate_and_fix_id(1))
+        self.player1_id.bind("<Return>", lambda e: self.focus_next(self.player1_name))
+        self.player1_id.bind("<Tab>", lambda e: self.focus_next(self.player1_name))
         
-        # VS label (centered vertically across rows 1-3)
-        ttk.Label(battle_frame, text="Versus", font=("Arial", 14, "bold")).grid(row=1, column=1, rowspan=3, padx=30)
+        # Versus label (centered vertically across rows 1-5)
+        ttk.Label(battle_frame, text="Versus", font=("Arial", 14, "bold")).grid(row=1, column=1, rowspan=5, padx=30)
         
         self.player2_id = ttk.Spinbox(battle_frame, from_=0, to=15, width=10, command=lambda: self.load_player_name(2))
         self.player2_id.set(1)
         self.player2_id.grid(row=1, column=2, padx=10, pady=2)
         self.player2_id.bind("<KeyRelease>", lambda e: self.load_player_name(2))
         self.player2_id.bind("<FocusOut>", lambda e: self.validate_and_fix_id(2))
-        self.player2_id.bind("<Return>", lambda e: self.validate_and_fix_id(2))
+        self.player2_id.bind("<Return>", lambda e: self.focus_next(self.player2_name))
+        self.player2_id.bind("<Tab>", lambda e: self.focus_next(self.player2_name))
         
-        # Name labels - centered above fields
-        ttk.Label(battle_frame, text="Name:", font=("Arial", 9)).grid(row=2, column=0, padx=10, pady=(10, 2))
-        ttk.Label(battle_frame, text="Name:", font=("Arial", 9)).grid(row=2, column=2, padx=10, pady=(10, 2))
+        # Player name labels
+        ttk.Label(battle_frame, text="Player:", font=("Arial", 9)).grid(row=2, column=0, padx=10, pady=(10, 2))
+        ttk.Label(battle_frame, text="Player:", font=("Arial", 9)).grid(row=2, column=2, padx=10, pady=(10, 2))
         
-        # Name entry fields
+        # Player name entry fields
         self.player1_name = ttk.Entry(battle_frame, width=20)
         self.player1_name.grid(row=3, column=0, padx=10, pady=2)
         self.player1_name.bind("<FocusOut>", lambda e: self.on_player_name_change(1))
         self.player1_name.bind("<KeyRelease>", lambda e: self.on_player_name_change(1))
-        
-        # Load saved name for player 1 (without updating buttons yet)
-        robot_id = self.player1_id.get()
-        if robot_id in self.player_names:
-            self.player1_name.insert(0, self.player_names[robot_id])
-        else:
-            self.player1_name.insert(0, f"Player {robot_id}")
+        self.player1_name.bind("<Return>", lambda e: self.focus_next(self.player1_robot))
+        self.player1_name.bind("<Tab>", lambda e: self.focus_next(self.player1_robot))
         
         self.player2_name = ttk.Entry(battle_frame, width=20)
         self.player2_name.grid(row=3, column=2, padx=10, pady=2)
         self.player2_name.bind("<FocusOut>", lambda e: self.on_player_name_change(2))
         self.player2_name.bind("<KeyRelease>", lambda e: self.on_player_name_change(2))
+        self.player2_name.bind("<Return>", lambda e: self.focus_next(self.player2_robot))
+        self.player2_name.bind("<Tab>", lambda e: self.focus_next(self.player2_robot))
         
-        # Load saved name for player 2 (without updating buttons yet)
-        robot_id = self.player2_id.get()
-        if robot_id in self.player_names:
-            self.player2_name.insert(0, self.player_names[robot_id])
-        else:
-            self.player2_name.insert(0, f"Player {robot_id}")
+        # Robot name labels
+        ttk.Label(battle_frame, text="Robot:", font=("Arial", 9)).grid(row=4, column=0, padx=10, pady=(10, 2))
+        ttk.Label(battle_frame, text="Robot:", font=("Arial", 9)).grid(row=4, column=2, padx=10, pady=(10, 2))
+        
+        # Robot name entry fields
+        self.player1_robot = ttk.Entry(battle_frame, width=20)
+        self.player1_robot.grid(row=5, column=0, padx=10, pady=2)
+        self.player1_robot.bind("<FocusOut>", lambda e: self.on_robot_name_change(1))
+        self.player1_robot.bind("<KeyRelease>", lambda e: self.on_robot_name_change(1))
+        self.player1_robot.bind("<Return>", lambda e: self.focus_next(self.player2_id))
+        self.player1_robot.bind("<Tab>", lambda e: self.focus_next(self.player2_id))
+        
+        self.player2_robot = ttk.Entry(battle_frame, width=20)
+        self.player2_robot.grid(row=5, column=2, padx=10, pady=2)
+        self.player2_robot.bind("<FocusOut>", lambda e: self.on_robot_name_change(2))
+        self.player2_robot.bind("<KeyRelease>", lambda e: self.on_robot_name_change(2))
+        self.player2_robot.bind("<Return>", lambda e: self.focus_next(self.btn_start_battle))
+        self.player2_robot.bind("<Tab>", lambda e: self.focus_next(self.btn_start_battle))
+        
+        # Load saved names for both players
+        self.load_player_name(1)
+        self.load_player_name(2)
         
         # Battle button
         self.btn_start_battle = ttk.Button(battle_frame, text="Fight!", command=self.start_battle,
                   width=30)
-        self.btn_start_battle.grid(row=4, column=0, columnspan=3, pady=20)
+        self.btn_start_battle.grid(row=6, column=0, columnspan=3, pady=20)
         
         # Winner Frame (with border, aligned with battle frame)
         winner_frame = ttk.LabelFrame(self.root, text="Declare Winner", padding=10)
@@ -340,12 +361,22 @@ class BattleBotGUI:
             return False
         
         try:
+            # Increase timeout for battle/winner commands as they take longer
+            old_timeout = self.serial_port.timeout
+            if command.startswith("battle,"):
+                self.serial_port.timeout = 10  # 10 seconds for battle (animations + music ~8s)
+            elif command.startswith("winner,"):
+                self.serial_port.timeout = 6  # 6 seconds for winner (animations ~5s)
+            
             self.serial_port.write(f"{command}\r".encode())
             
             # Read echo
             echo = self.serial_port.readline().decode().strip()
             # Read response
             response = self.serial_port.readline().decode().strip()
+            
+            # Restore original timeout
+            self.serial_port.timeout = old_timeout
             
             if response == "OK":
                 # Mark connection as verified on first successful command
@@ -360,6 +391,9 @@ class BattleBotGUI:
                 self.log(f"✗ {command} - Response: {response}")
                 return False
         except Exception as e:
+            # Restore timeout on error too
+            if 'old_timeout' in locals():
+                self.serial_port.timeout = old_timeout
             messagebox.showerror("Communication Error", f"Failed to send command: {e}")
             self.log(f"Error sending '{command}': {e}")
             return False
@@ -429,23 +463,36 @@ class BattleBotGUI:
             messagebox.showerror("Error", f"Failed to set controller ID: {e}")
             self.log(f"✗ Failed to set controller ID: {e}")
     
+    def focus_next(self, widget):
+        """Move focus to the next widget."""
+        widget.focus_set()
+        return "break"  # Prevent default Tab/Enter behavior
+    
     def load_player_name(self, player: int):
-        """Load saved player name for selected robot ID."""
+        """Load saved player and robot names for selected controller ID."""
         if player == 1:
-            robot_id = self.player1_id.get()
-            name_entry = self.player1_name
+            controller_id = self.player1_id.get()
+            player_entry = self.player1_name
+            robot_entry = self.player1_robot
         else:
-            robot_id = self.player2_id.get()
-            name_entry = self.player2_name
+            controller_id = self.player2_id.get()
+            player_entry = self.player2_name
+            robot_entry = self.player2_robot
         
-        # Clear current name
-        name_entry.delete(0, tk.END)
+        # Clear current names
+        player_entry.delete(0, tk.END)
+        robot_entry.delete(0, tk.END)
         
-        # Load saved name if exists, otherwise use default
-        if robot_id in self.player_names:
-            name_entry.insert(0, self.player_names[robot_id])
+        # Load saved names if exist, otherwise use defaults
+        if controller_id in self.player_names:
+            player_entry.insert(0, self.player_names[controller_id])
         else:
-            name_entry.insert(0, f"Player {robot_id}")
+            player_entry.insert(0, f"Player {controller_id}")
+        
+        if controller_id in self.robot_names:
+            robot_entry.insert(0, self.robot_names[controller_id])
+        else:
+            robot_entry.insert(0, f"Robot {controller_id}")
         
         # Update winner button text
         self.update_winner_buttons()
@@ -455,8 +502,17 @@ class BattleBotGUI:
         self.save_player_name(player)
         self.update_winner_buttons()
     
+    def on_robot_name_change(self, player: int):
+        """Handle robot name change event."""
+        self.save_robot_name(player)
+        self.update_winner_buttons()
+    
     def update_winner_buttons(self):
         """Update the text on winner buttons to show current player names."""
+        # Only update if buttons have been created (they're created after initial load)
+        if not hasattr(self, 'btn_winner1'):
+            return
+        
         name1 = self.player1_name.get() or "Player 1"
         name2 = self.player2_name.get() or "Player 2"
         self.btn_winner1.config(text=f"{name1} Wins!")
@@ -465,14 +521,27 @@ class BattleBotGUI:
     def save_player_name(self, player: int):
         """Save player name to config."""
         if player == 1:
-            robot_id = self.player1_id.get()
+            controller_id = self.player1_id.get()
             name = self.player1_name.get()
         else:
-            robot_id = self.player2_id.get()
+            controller_id = self.player2_id.get()
             name = self.player2_name.get()
         
         if name.strip():
-            self.player_names[robot_id] = name
+            self.player_names[controller_id] = name
+            self.save_config()
+    
+    def save_robot_name(self, player: int):
+        """Save robot name to config."""
+        if player == 1:
+            controller_id = self.player1_id.get()
+            name = self.player1_robot.get()
+        else:
+            controller_id = self.player2_id.get()
+            name = self.player2_robot.get()
+        
+        if name.strip():
+            self.robot_names[controller_id] = name
             self.save_config()
     
     def start_battle(self):
