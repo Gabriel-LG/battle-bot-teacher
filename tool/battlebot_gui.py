@@ -19,6 +19,7 @@ class BattleBotGUI:
         self.root.title("BattleBot Teacher Control")
         self.root.geometry("600x600")
         self.serial_port: Optional[serial.Serial] = None
+        self.connection_verified: bool = False
         
         # Load player names from config (in same directory as script)
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -52,21 +53,21 @@ class BattleBotGUI:
         port_frame = ttk.LabelFrame(self.root, text="Serial Connection", padding=10)
         port_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        ttk.Label(port_frame, text="Port:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(port_frame, text="Port:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
         self.port_combo = ttk.Combobox(port_frame, width=30, state="readonly")
-        self.port_combo.grid(row=0, column=1, padx=5)
+        self.port_combo.grid(row=0, column=1, columnspan=2, sticky=tk.W)
         
         self.btn_refresh = ttk.Button(port_frame, text="Refresh", command=self.refresh_ports)
-        self.btn_refresh.grid(row=0, column=2, padx=5)
+        self.btn_refresh.grid(row=0, column=3, padx=5)
         
-        self.btn_connect = ttk.Button(port_frame, text="Connect", command=self.connect)
-        self.btn_connect.grid(row=0, column=3, padx=5)
+        self.btn_connect = ttk.Button(port_frame, text="Connect", command=self.connect, width=15)
+        self.btn_connect.grid(row=1, column=1, padx=(0, 5), pady=(5, 0), sticky=tk.W)
         
-        self.btn_disconnect = ttk.Button(port_frame, text="Disconnect", command=self.disconnect)
-        self.btn_disconnect.grid(row=0, column=4, padx=5)
+        self.btn_disconnect = ttk.Button(port_frame, text="Disconnect", command=self.disconnect, width=15)
+        self.btn_disconnect.grid(row=1, column=2, pady=(5, 0), sticky=tk.W)
         
         self.connection_status = ttk.Label(port_frame, text="Not Connected", foreground="red")
-        self.connection_status.grid(row=1, column=0, columnspan=5, pady=5)
+        self.connection_status.grid(row=2, column=0, columnspan=4, pady=5)
         
         # Global Controls Frame
         global_frame = ttk.LabelFrame(self.root, text="Global Controls", padding=10)
@@ -76,13 +77,13 @@ class BattleBotGUI:
                   width=20)
         self.btn_mute.grid(row=0, column=0, padx=5, pady=5)
         
-        self.btn_unmute = ttk.Button(global_frame, text="Unmute All", command=lambda: self.send_command("mute,0"),
-                  width=20)
-        self.btn_unmute.grid(row=0, column=1, padx=5, pady=5)
-        
         self.btn_stop = ttk.Button(global_frame, text="Stop All Motors", command=lambda: self.send_command("stop,1"),
                   width=20)
-        self.btn_stop.grid(row=1, column=0, padx=5, pady=5)
+        self.btn_stop.grid(row=0, column=1, padx=5, pady=5)
+        
+        self.btn_unmute = ttk.Button(global_frame, text="Unmute All", command=lambda: self.send_command("mute,0"),
+                  width=20)
+        self.btn_unmute.grid(row=1, column=0, padx=5, pady=5)
         
         self.btn_enable = ttk.Button(global_frame, text="Enable All Motors", command=lambda: self.send_command("stop,0"),
                   width=20)
@@ -109,7 +110,7 @@ class BattleBotGUI:
         self.player1_id.bind("<FocusOut>", lambda e: self.load_player_name(1))
         
         # VS label (centered vertically across rows 1-3)
-        ttk.Label(battle_frame, text="VS", font=("Arial", 14, "bold")).grid(row=1, column=1, rowspan=3, padx=30)
+        ttk.Label(battle_frame, text="Versus", font=("Arial", 14, "bold")).grid(row=1, column=1, rowspan=3, padx=30)
         
         self.player2_id = ttk.Spinbox(battle_frame, from_=0, to=15, width=10, command=lambda: self.load_player_name(2))
         self.player2_id.set(1)
@@ -147,8 +148,8 @@ class BattleBotGUI:
             self.player2_name.insert(0, f"Player {robot_id}")
         
         # Battle button
-        self.btn_start_battle = ttk.Button(battle_frame, text="Start Battle", command=self.start_battle,
-                  width=20)
+        self.btn_start_battle = ttk.Button(battle_frame, text="Fight!", command=self.start_battle,
+                  width=30)
         self.btn_start_battle.grid(row=4, column=0, columnspan=3, pady=20)
         
         # Winner Frame (with border, aligned with battle frame)
@@ -174,20 +175,17 @@ class BattleBotGUI:
         # Update button text with initial names
         self.update_winner_buttons()
         
-        # Spacer frame that expands to take remaining vertical space
-        spacer_frame = ttk.Frame(self.root)
-        spacer_frame.pack(fill=tk.BOTH, expand=True)
+        # Spacer frame that expands to take remaining vertical space (when log is hidden)
+        self.spacer_frame = ttk.Frame(self.root)
+        self.spacer_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Status/Log Frame with toggle
-        log_header_frame = ttk.Frame(self.root)
-        log_header_frame.pack(fill=tk.X, padx=10, pady=(5, 0))
+        # Status/Log toggle button frame (at bottom when hidden)
+        self.log_header_frame = ttk.Frame(self.root)
+        self.log_header_frame.pack(fill=tk.X, padx=10, pady=(5, 5))
         
         self.log_visible = tk.BooleanVar(value=False)
-        self.btn_toggle_log = ttk.Button(log_header_frame, text="▶ Show Status Log", command=self.toggle_log)
+        self.btn_toggle_log = ttk.Button(self.log_header_frame, text="▶ Show Status Log", command=self.toggle_log)
         self.btn_toggle_log.pack(side=tk.LEFT)
-        
-        self.log_frame = ttk.LabelFrame(self.root, text="Status Log", padding=5)
-        # Don't pack initially (collapsed by default)
         
         self.log_frame = ttk.LabelFrame(self.root, text="Status Log", padding=5)
         # Don't pack initially (collapsed by default)
@@ -205,13 +203,28 @@ class BattleBotGUI:
     def toggle_log(self):
         """Toggle visibility of status log."""
         if self.log_visible.get():
-            # Hide log
+            # Hide log - restore spacer and move toggle button back to bottom
             self.log_frame.pack_forget()
+            
+            # Restore spacer frame to fill space
+            self.spacer_frame.pack(fill=tk.BOTH, expand=True)
+            
+            # Move log header back to bottom (after spacer)
+            self.log_header_frame.pack_forget()
+            self.log_header_frame.pack(fill=tk.X, padx=10, pady=(5, 5))
+            
             self.btn_toggle_log.config(text="▶ Show Status Log")
             self.log_visible.set(False)
         else:
-            # Show log
+            # Show log - move toggle button right after winner frame and hide spacer
+            # Reposition toggle button header before spacer (while it's still packed)
+            self.log_header_frame.pack_forget()
+            self.log_header_frame.pack(fill=tk.X, padx=10, pady=(5, 0), before=self.spacer_frame)
+            
+            # Now hide spacer and show log frame to fill remaining space
+            self.spacer_frame.pack_forget()
             self.log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+            
             self.btn_toggle_log.config(text="▼ Hide Status Log")
             self.log_visible.set(True)
     
@@ -261,16 +274,10 @@ class BattleBotGUI:
         
         try:
             self.serial_port = serial.Serial(port_name, 9600, timeout=1)
-            # Read the identification string
-            response = self.serial_port.readline().decode().strip()
-            if response == "commander":
-                self.connection_status.config(text=f"Connected to {port_name}", foreground="green")
-                self.log(f"Connected to {port_name} (verified)")
-                self.update_controls_state(True)
-            else:
-                self.connection_status.config(text=f"Connected to {port_name} (unverified)", foreground="orange")
-                self.log(f"Connected to {port_name} but didn't receive 'commander' greeting")
-                self.update_controls_state(True)
+            self.connection_status.config(text=f"Connected to {port_name}", foreground="orange")
+            self.log(f"Connected to {port_name} (not yet verified)")
+            self.connection_verified = False
+            self.update_controls_state(True)
         except Exception as e:
             messagebox.showerror("Connection Error", f"Failed to connect: {e}")
             self.log(f"Connection failed: {e}")
@@ -281,6 +288,7 @@ class BattleBotGUI:
         if self.serial_port and self.serial_port.is_open:
             self.serial_port.close()
             self.serial_port = None
+            self.connection_verified = False
             self.connection_status.config(text="Not Connected", foreground="red")
             self.update_controls_state(False)
             self.log("Disconnected")
@@ -302,7 +310,13 @@ class BattleBotGUI:
             response = self.serial_port.readline().decode().strip()
             
             if response == "OK":
-                self.log(f"✓ {command}")
+                # Mark connection as verified on first successful command
+                if not self.connection_verified:
+                    self.connection_verified = True
+                    port_name = self.port_combo.get().split(" - ")[0]
+                    self.connection_status.config(text=f"Connected to {port_name} (verified)", foreground="green")
+                
+                self.log(f"✓ {command} - Response: {response}")
                 return True
             else:
                 self.log(f"✗ {command} - Response: {response}")
