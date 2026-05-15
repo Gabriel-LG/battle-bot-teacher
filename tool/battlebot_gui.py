@@ -5,11 +5,14 @@ A graphical interface for controlling BattleBot robots via micro:bit serial inte
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
 import serial
 import serial.tools.list_ports
 import json
 import os
+import threading
+import time
+import re
 from typing import Optional
 
 
@@ -20,6 +23,11 @@ class BattleBotGUI:
         self.root.geometry("600x600")
         self.serial_port: Optional[serial.Serial] = None
         self.connection_verified: bool = False
+        
+        # Controller detection
+        self.controller_detected = False
+        self.read_thread: Optional[threading.Thread] = None
+        self.stop_reading = False
         
         # Load player names from config (in same directory as script)
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -277,7 +285,13 @@ class BattleBotGUI:
             self.connection_status.config(text=f"Connected to {port_name}", foreground="orange")
             self.log(f"Connected to {port_name} (not yet verified)")
             self.connection_verified = False
+            self.controller_detected = False
             self.update_controls_state(True)
+            
+            # Start background thread to monitor for controller messages
+            self.stop_reading = False
+            self.read_thread = threading.Thread(target=self.monitor_serial, daemon=True)
+            self.read_thread.start()
         except Exception as e:
             messagebox.showerror("Connection Error", f"Failed to connect: {e}")
             self.log(f"Connection failed: {e}")
@@ -286,9 +300,14 @@ class BattleBotGUI:
     def disconnect(self):
         """Disconnect from serial port."""
         if self.serial_port and self.serial_port.is_open:
+            self.stop_reading = True
+            if self.read_thread:
+                self.read_thread.join(timeout=2)
+            
             self.serial_port.close()
             self.serial_port = None
             self.connection_verified = False
+            self.controller_detected = False
             self.connection_status.config(text="Not Connected", foreground="red")
             self.update_controls_state(False)
             self.log("Disconnected")
@@ -325,6 +344,71 @@ class BattleBotGUI:
             messagebox.showerror("Communication Error", f"Failed to send command: {e}")
             self.log(f"Error sending '{command}': {e}")
             return False
+    
+    def monitor_serial(self):
+        """Background thread to monitor serial input for controller messages."""
+        import re
+        controller_pattern = re.compile(r'Set ID \((\d+|NaN)\):', re.IGNORECASE)
+        
+        while not self.stop_reading and self.serial_port and self.serial_port.is_open:
+            try:
+                if self.serial_port.in_waiting > 0:
+                    line = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
+                    
+                    if line:
+                        match = controller_pattern.match(line)
+                        if match:
+                            current_id_str = match.group(1)
+                            # Handle NaN (case insensitive) as None, otherwise convert to int
+                            current_id = None if current_id_str.upper() == "NAN" else int(current_id_str)
+                            if not self.controller_detected:
+                                self.controller_detected = True
+                                # Use after() to schedule GUI update on main thread
+                                self.root.after(0, lambda: self.handle_controller_detected(current_id))
+                
+                time.sleep(0.1)
+            except Exception as e:
+                if not self.stop_reading:
+                    self.root.after(0, lambda: self.log(f"Monitor error: {e}"))
+                break
+    
+    def handle_controller_detected(self, current_id: Optional[int]):
+        """Handle controller detection on main thread."""
+        port_name = self.port_combo.get().split(" - ")[0]
+        self.connection_status.config(text=f"Controller detected on {port_name}", foreground="blue")
+        
+        if current_id is None:
+            self.log(f"🎮 Controller detected with ID: NAN (not set)")
+            id_text = "NAN (not set)"
+        else:
+            self.log(f"🎮 Controller detected with ID {current_id}")
+            id_text = str(current_id)
+        
+        # Ask user for new ID
+        new_id = tk.simpledialog.askinteger(
+            "Controller Detected",
+            f"A BattleBot controller is connected.\n\nCurrent ID: {id_text}\n\nEnter new ID (0-15):",
+            minvalue=0,
+            maxvalue=15,
+            initialvalue=current_id if current_id is not None else 0
+        )
+        
+        if new_id is not None and new_id != current_id:
+            self.set_controller_id(new_id)
+            # Small delay to ensure command is sent before disconnect
+            self.root.after(500, self.disconnect)
+        else:
+            # User cancelled or kept same ID
+            self.disconnect()
+    
+    def set_controller_id(self, new_id: int):
+        """Send new ID to controller."""
+        try:
+            self.serial_port.write(f"{new_id}\r".encode())
+            self.log(f"✓ Controller ID set to {new_id}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to set controller ID: {e}")
+            self.log(f"✗ Failed to set controller ID: {e}")
     
     def load_player_name(self, player: int):
         """Load saved player name for selected robot ID."""
