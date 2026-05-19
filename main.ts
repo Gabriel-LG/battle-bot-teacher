@@ -1,14 +1,15 @@
 function muteAll (mute: number) {
-    for (let index = 0; index <= 15; index++) {
+    for (let index = 0; index <= 41; index++) {
         teacher.enableSound(index, mute == 0)
         teacher.transmitState(index)
     }
 }
 function winner (player: number) {
-    for (let index = 0; index <= 15; index++) {
-        if (index != player) {
+    for (let index = 0; index <= 41; index++) {
+        if (0 != player) {
             teacher.enableSound(index, false)
             teacher.enableDriving(index, false)
+            teacher.enableServos(index, false)
             teacher.transmitState(index)
         }
     }
@@ -16,25 +17,29 @@ function winner (player: number) {
     teacher.setVictory(player, true)
     teacher.enableSound(player, true)
     teacher.enableDriving(player, true)
+    teacher.enableServos(player, true)
     teacher.transmitState(player)
     basic.pause(1000)
     teacher.setVictory(player, false)
     teacher.transmitState(player)
 }
-function stopAll (mute: number) {
-    for (let index = 0; index <= 15; index++) {
-        teacher.enableDriving(index, mute == 0)
+function freezeAll (freeze: number) {
+    for (let index = 0; index <= 41; index++) {
+        teacher.enableServos(index, freeze == 0)
         teacher.transmitState(index)
     }
 }
 function startBattle (player1: number, player2: number) {
-    for (let index = 0; index <= 15; index++) {
+    for (let index = 0; index <= 41; index++) {
         teacher.enableSound(index, false)
         teacher.enableDriving(index, false)
+        teacher.enableServos(index, false)
         teacher.transmitState(index)
     }
     teacher.enableSound(player1, true)
     teacher.enableSound(player2, true)
+    teacher.enableServos(player1, true)
+    teacher.enableServos(player2, true)
     teacher.transmitState(player1)
     teacher.transmitState(player2)
     music.play(music.stringPlayable("C - C - C - C5 C5 ", 90), music.PlaybackMode.UntilDone)
@@ -42,6 +47,12 @@ function startBattle (player1: number, player2: number) {
     teacher.enableDriving(player2, true)
     teacher.transmitState(player1)
     teacher.transmitState(player2)
+}
+function haltAll (halt: number) {
+    for (let index = 0; index <= 41; index++) {
+        teacher.enableDriving(index, halt == 0)
+        teacher.transmitState(index)
+    }
 }
 serial.onDataReceived(serial.delimiters(Delimiters.CarriageReturn), function () {
     line = serial.readUntil(serial.delimiters(Delimiters.CarriageReturn))
@@ -52,8 +63,11 @@ serial.onDataReceived(serial.delimiters(Delimiters.CarriageReturn), function () 
     if (command == "mute") {
         muteAll(arg1)
         serial.writeLine("OK")
-    } else if (command == "stop") {
-        stopAll(arg1)
+    } else if (command == "halt") {
+        haltAll(arg1)
+        serial.writeLine("OK")
+    } else if (command == "halt") {
+        haltAll(arg1)
         serial.writeLine("OK")
     } else if (command == "battle") {
         startBattle(arg1, arg2)
@@ -72,11 +86,9 @@ let line = ""
 serial.redirectToUSB()
 serial.setBaudRate(BaudRate.BaudRate9600)
 serial.writeLine("commander")
-control.inBackground(function () {
-    while (true) {
-        for (let index = 0; index <= 15; index++) {
-            teacher.transmitState(index)
-        }
-        basic.pause(100)
+// Iterating all IDs takes ~41 ms
+loops.everyInterval(100, function () {
+    for (let index2 = 0; index2 <= 41; index2++) {
+        teacher.transmitState(index2)
     }
 })
