@@ -8,14 +8,14 @@ function winner (player: number) {
     for (let index = 0; index <= 15; index++) {
         if (index != player) {
             teacher.enableSound(index, false)
-            teacher.enableMotors(index, false)
+            teacher.enableDriving(index, false)
             teacher.transmitState(index)
         }
     }
     music.play(music.stringPlayable("C C - C C5 C5 C5 - ", 240), music.PlaybackMode.UntilDone)
     teacher.setVictory(player, true)
     teacher.enableSound(player, true)
-    teacher.enableMotors(player, true)
+    teacher.enableDriving(player, true)
     teacher.transmitState(player)
     basic.pause(1000)
     teacher.setVictory(player, false)
@@ -23,14 +23,14 @@ function winner (player: number) {
 }
 function stopAll (mute: number) {
     for (let index = 0; index <= 15; index++) {
-        teacher.enableMotors(index, mute == 0)
+        teacher.enableDriving(index, mute == 0)
         teacher.transmitState(index)
     }
 }
 function startBattle (player1: number, player2: number) {
     for (let index = 0; index <= 15; index++) {
         teacher.enableSound(index, false)
-        teacher.enableMotors(index, false)
+        teacher.enableDriving(index, false)
         teacher.transmitState(index)
     }
     teacher.enableSound(player1, true)
@@ -38,8 +38,8 @@ function startBattle (player1: number, player2: number) {
     teacher.transmitState(player1)
     teacher.transmitState(player2)
     music.play(music.stringPlayable("C - C - C - C5 C5 ", 90), music.PlaybackMode.UntilDone)
-    teacher.enableMotors(player1, true)
-    teacher.enableMotors(player2, true)
+    teacher.enableDriving(player1, true)
+    teacher.enableDriving(player2, true)
     teacher.transmitState(player1)
     teacher.transmitState(player2)
 }
