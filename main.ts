@@ -66,7 +66,7 @@ serial.onDataReceived(serial.delimiters(Delimiters.CarriageReturn), function () 
     } else if (command == "halt") {
         haltAll(arg1)
         serial.writeLine("OK")
-    } else if (command == "halt") {
+    } else if (command == "freeze") {
         haltAll(arg1)
         serial.writeLine("OK")
     } else if (command == "battle") {
