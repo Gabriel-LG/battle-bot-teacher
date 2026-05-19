@@ -23,6 +23,7 @@ class BattleBotGUI:
         self.root.geometry("600x600")
         self.serial_port: Optional[serial.Serial] = None
         self.connection_verified: bool = False
+        self.command_in_progress: bool = False  # Track if long command is executing
         
         # Controller detection
         self.controller_detected = False
@@ -91,17 +92,25 @@ class BattleBotGUI:
                   width=20)
         self.btn_mute.grid(row=0, column=0, padx=5, pady=5)
         
-        self.btn_stop = ttk.Button(global_frame, text="Stop All Motors", command=lambda: self.send_command("stop,1"),
+        self.btn_halt = ttk.Button(global_frame, text="Halt All Motors", command=lambda: self.send_command("halt,1"),
                   width=20)
-        self.btn_stop.grid(row=0, column=1, padx=5, pady=5)
+        self.btn_halt.grid(row=0, column=1, padx=5, pady=5)
+        
+        self.btn_freeze = ttk.Button(global_frame, text="Freeze All Servos", command=lambda: self.send_command("freeze,1"),
+                  width=20)
+        self.btn_freeze.grid(row=0, column=2, padx=5, pady=5)
         
         self.btn_unmute = ttk.Button(global_frame, text="Unmute All", command=lambda: self.send_command("mute,0"),
                   width=20)
         self.btn_unmute.grid(row=1, column=0, padx=5, pady=5)
         
-        self.btn_enable = ttk.Button(global_frame, text="Enable All Motors", command=lambda: self.send_command("stop,0"),
+        self.btn_unhalt = ttk.Button(global_frame, text="Unhalt All Motors", command=lambda: self.send_command("halt,0"),
                   width=20)
-        self.btn_enable.grid(row=1, column=1, padx=5, pady=5)
+        self.btn_unhalt.grid(row=1, column=1, padx=5, pady=5)
+        
+        self.btn_unfreeze = ttk.Button(global_frame, text="Unfreeze All Servos", command=lambda: self.send_command("freeze,0"),
+                  width=20)
+        self.btn_unfreeze.grid(row=1, column=2, padx=5, pady=5)
         
         # Battle Controls Frame
         battle_frame = ttk.LabelFrame(self.root, text="Battle Setup", padding=10)
@@ -117,7 +126,7 @@ class BattleBotGUI:
         ttk.Label(battle_frame, text="Controller:", font=("Arial", 9)).grid(row=0, column=2, padx=10, pady=(5, 2))
         
         # Robot ID spinboxes
-        self.player1_id = ttk.Spinbox(battle_frame, from_=0, to=15, width=10, command=lambda: self.load_player_name(1))
+        self.player1_id = ttk.Spinbox(battle_frame, from_=0, to=41, width=10, command=lambda: self.load_player_name(1))
         self.player1_id.set(0)
         self.player1_id.grid(row=1, column=0, padx=10, pady=2)
         self.player1_id.bind("<KeyRelease>", lambda e: self.load_player_name(1))
@@ -128,7 +137,7 @@ class BattleBotGUI:
         # Versus label (centered vertically across rows 1-5)
         ttk.Label(battle_frame, text="Versus", font=("Arial", 14, "bold")).grid(row=1, column=1, rowspan=5, padx=30)
         
-        self.player2_id = ttk.Spinbox(battle_frame, from_=0, to=15, width=10, command=lambda: self.load_player_name(2))
+        self.player2_id = ttk.Spinbox(battle_frame, from_=0, to=41, width=10, command=lambda: self.load_player_name(2))
         self.player2_id.set(1)
         self.player2_id.grid(row=1, column=2, padx=10, pady=2)
         self.player2_id.bind("<KeyRelease>", lambda e: self.load_player_name(2))
@@ -236,11 +245,11 @@ class BattleBotGUI:
         spinbox = self.player1_id if player == 1 else self.player2_id
         try:
             value = int(spinbox.get())
-            # Clamp to valid range
+            # Clamp to valid range (0-41)
             if value < 0:
                 spinbox.set(0)
-            elif value > 15:
-                spinbox.set(15)
+            elif value > 41:
+                spinbox.set(41)
         except ValueError:
             # Not a valid number, reset to 0
             spinbox.set(0)
@@ -291,8 +300,10 @@ class BattleBotGUI:
         control_state = tk.NORMAL if connected else tk.DISABLED
         self.btn_mute.config(state=control_state)
         self.btn_unmute.config(state=control_state)
-        self.btn_stop.config(state=control_state)
-        self.btn_enable.config(state=control_state)
+        self.btn_halt.config(state=control_state)
+        self.btn_unhalt.config(state=control_state)
+        self.btn_freeze.config(state=control_state)
+        self.btn_unfreeze.config(state=control_state)
         self.btn_start_battle.config(state=control_state)
         self.btn_winner1.config(state=control_state)
         self.btn_winner2.config(state=control_state)
@@ -304,8 +315,11 @@ class BattleBotGUI:
         self.port_combo['values'] = port_list
         if port_list:
             self.port_combo.current(0)
+            self.btn_connect.config(state=tk.NORMAL)
             self.log(f"Found {len(port_list)} port(s)")
         else:
+            self.port_combo.set('')  # Clear the selection when no ports available
+            self.btn_connect.config(state=tk.DISABLED)
             self.log("No serial ports found")
     
     def connect(self):
@@ -354,19 +368,46 @@ class BattleBotGUI:
         else:
             self.log("Not connected")
     
-    def send_command(self, command: str) -> bool:
-        """Send command to micro:bit and wait for response."""
+    def send_command(self, command: str, threaded: bool = False) -> bool:
+        """Send command to micro:bit and wait for response.
+        
+        Args:
+            command: The command to send
+            threaded: If True, run in background thread (for long commands)
+        """
+        if threaded:
+            # Run in background thread to keep GUI responsive
+            thread = threading.Thread(target=self._send_command_impl, args=(command,), daemon=True)
+            thread.start()
+            return True
+        else:
+            return self._send_command_impl(command)
+    
+    def _send_command_impl(self, command: str) -> bool:
+        """Internal implementation of send_command."""
         if not self.serial_port or not self.serial_port.is_open:
-            messagebox.showerror("Error", "Not connected to serial port")
+            self.root.after(0, lambda: messagebox.showerror("Error", "Not connected to serial port"))
+            return False
+        
+        # Check if a long command is already in progress
+        if self.command_in_progress:
+            self.root.after(0, lambda: self.log("⏳ Command already in progress, please wait..."))
             return False
         
         try:
             # Increase timeout for battle/winner commands as they take longer
             old_timeout = self.serial_port.timeout
+            is_long_command = command.startswith("battle,") or command.startswith("winner,")
+            
             if command.startswith("battle,"):
                 self.serial_port.timeout = 10  # 10 seconds for battle (animations + music ~8s)
             elif command.startswith("winner,"):
                 self.serial_port.timeout = 6  # 6 seconds for winner (animations ~5s)
+            
+            # Disable buttons for long commands
+            if is_long_command:
+                self.command_in_progress = True
+                self.root.after(0, lambda: self.update_controls_state(False))  # Disable all controls
             
             self.serial_port.write(f"{command}\r".encode())
             
@@ -378,24 +419,32 @@ class BattleBotGUI:
             # Restore original timeout
             self.serial_port.timeout = old_timeout
             
+            # Re-enable buttons for long commands
+            if is_long_command:
+                self.command_in_progress = False
+                self.root.after(0, lambda: self.update_controls_state(True))  # Re-enable all controls
+            
             if response == "OK":
                 # Mark connection as verified on first successful command
                 if not self.connection_verified:
                     self.connection_verified = True
                     port_name = self.port_combo.get().split(" - ")[0]
-                    self.connection_status.config(text=f"Connected to {port_name} (verified)", foreground="green")
+                    self.root.after(0, lambda: self.connection_status.config(text=f"Connected to {port_name} (verified)", foreground="green"))
                 
-                self.log(f"✓ {command} - Response: {response}")
+                self.root.after(0, lambda: self.log(f"✓ {command} - Response: {response}"))
                 return True
             else:
-                self.log(f"✗ {command} - Response: {response}")
+                self.root.after(0, lambda: self.log(f"✗ {command} - Response: {response}"))
                 return False
         except Exception as e:
-            # Restore timeout on error too
+            # Restore timeout and re-enable buttons on error
             if 'old_timeout' in locals():
                 self.serial_port.timeout = old_timeout
-            messagebox.showerror("Communication Error", f"Failed to send command: {e}")
-            self.log(f"Error sending '{command}': {e}")
+            if is_long_command:
+                self.command_in_progress = False
+                self.root.after(0, lambda: self.update_controls_state(True))
+            self.root.after(0, lambda: messagebox.showerror("Communication Error", f"Failed to send command: {e}"))
+            self.root.after(0, lambda: self.log(f"Error sending '{command}': {e}"))
             return False
     
     def monitor_serial(self):
@@ -546,6 +595,11 @@ class BattleBotGUI:
     
     def start_battle(self):
         """Start a battle between two players."""
+        # Check if command is already in progress before validation
+        if self.command_in_progress:
+            self.log("⏳ Command already in progress, please wait...")
+            return
+        
         try:
             p1_id = int(self.player1_id.get())
             p2_id = int(self.player2_id.get())
@@ -557,8 +611,8 @@ class BattleBotGUI:
             messagebox.showerror("Error", "Players must have different robot IDs")
             return
         
-        if not (0 <= p1_id <= 15 and 0 <= p2_id <= 15):
-            messagebox.showerror("Error", "Robot IDs must be between 0 and 15")
+        if not (0 <= p1_id <= 41 and 0 <= p2_id <= 41):
+            messagebox.showerror("Error", "Robot IDs must be between 0 and 41")
             return
         
         # Save names
@@ -568,11 +622,16 @@ class BattleBotGUI:
         p1_name = self.player1_name.get() or f"Player {p1_id}"
         p2_name = self.player2_name.get() or f"Player {p2_id}"
         
-        if self.send_command(f"battle,{p1_id},{p2_id}"):
-            self.log(f"⚔ Battle started: {p1_name} (ID {p1_id}) vs {p2_name} (ID {p2_id})")
+        self.log(f"⚔ Battle starting: {p1_name} (ID {p1_id}) vs {p2_name} (ID {p2_id})")
+        self.send_command(f"battle,{p1_id},{p2_id}", threaded=True)
     
     def declare_winner(self, player: int):
         """Declare the winner of the battle."""
+        # Check if command is already in progress before validation
+        if self.command_in_progress:
+            self.log("⏳ Command already in progress, please wait...")
+            return
+        
         try:
             if player == 1:
                 winner_id = int(self.player1_id.get())
@@ -584,12 +643,12 @@ class BattleBotGUI:
             messagebox.showerror("Error", "Invalid robot ID")
             return
         
-        if not (0 <= winner_id <= 15):
-            messagebox.showerror("Error", "Robot ID must be between 0 and 15")
+        if not (0 <= winner_id <= 41):
+            messagebox.showerror("Error", "Robot ID must be between 0 and 41")
             return
         
-        if self.send_command(f"winner,{winner_id}"):
-            self.log(f"🏆 Winner: {winner_name} (ID {winner_id})")
+        self.log(f"🏆 Declaring winner: {winner_name} (ID {winner_id})")
+        self.send_command(f"winner,{winner_id}", threaded=True)
     
     def log(self, message: str):
         """Add message to status log."""
