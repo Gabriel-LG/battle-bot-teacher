@@ -489,9 +489,9 @@ class BattleBotGUI:
         # Ask user for new ID
         new_id = tk.simpledialog.askinteger(
             "Controller Detected",
-            f"A BattleBot controller is connected.\n\nCurrent ID: {id_text}\n\nEnter new ID (0-15):",
+            f"A BattleBot controller is connected.\n\nCurrent ID: {id_text}\n\nEnter new ID (0-41):",
             minvalue=0,
-            maxvalue=15,
+            maxvalue=41,
             initialvalue=current_id if current_id is not None else 0
         )
         
